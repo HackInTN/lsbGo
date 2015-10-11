@@ -6,7 +6,6 @@ import
 	"image"
 	"image/png"
 	"os"
-	"encoding/binary"
 	_ "strconv"
 	"math"
 )
@@ -80,7 +79,6 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 	bounds := container.Bounds()
 
 	messageBytes := openMessage(messagePath)
-
 	pixel := Pixel{-1,-1,""}
 
 	lenData := len(messageBytes)
@@ -99,25 +97,23 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 		pixel.next(bounds)
 	}
 
-	
+	var by byte
 	for i:=0;i<lenData;i++ {
-		//fmt.Println(messageBytes[i])
+		by = messageBytes[i]
 		for j:=0;j<8;j++ {
 			//get byte of container
 			bytLSB := getPixelBytes(container,pixel)
 			
 			//get bit of message
-			bit := getMessageBit(messageBytes,i,j)
-			// fmt.Print(bit)
+			bit := getMessageBit(by,j)
 
 			//set bit on container
-			bytLSB = setLSB(bytLSB,bit)
+			bytLSB = setLSB(bytLSB,int(bit))
 			setPixelBytes(container, pixel, bytLSB)
 
 
 			pixel.next(bounds)
 		}
-		// fmt.Println("")
 				
 	}
 
@@ -140,7 +136,7 @@ func extractMessage(containerPath string, outputPath string){
 		pixel.next(bounds)
 	}
 
-	tab := make([]byte, int(length))
+	tab := make([]byte, uint(length))
 	var by byte
 
 	for i:=0;i<length;i++ {
@@ -161,7 +157,7 @@ func extractMessage(containerPath string, outputPath string){
 		tab[i]=by
 		// fmt.Println("")
 		// fmt.Println(by)
-		by = 0	
+		by = 0x0000	
 		
 	}
 	// fmt.Println("")
@@ -180,36 +176,35 @@ func (p *Pixel) next(b image.Rectangle){
 	}
 	//TODO seek alpha
 
-	/*switch p.rgba {
+	switch p.rgba {
 		case "r":
 			p.rgba = "g"
 		case "g":
 			p.rgba = "b"
 		case "b":
 			p.rgba = "r"
-	}*/
+	}
 
 	if p.rgba=="r" {
-		if p.x < b.Max.X {
-			p.x++
-		}else{
+		p.x++
+		if p.x == b.Max.X {
 			p.x=0
 			p.y++
-			if p.y>b.Max.Y {
+			if p.y>=b.Max.Y {
 				fmt.Println("TODO check size before.")
 			}
 		}
 	}
 }
 
-func getMessageBit(b []byte, numByte int, numBit int)(int){
-	return ( int(b[numByte]) & (1<<uint(numBit-1))) >> uint(numBit-1)
+func getMessageBit(b byte,  numBit int)(uint){
+	return ( uint(b) & (1<<uint(numBit)) ) >> uint(numBit)
 }
 
 func setMessageBit(b byte, numBit int, value int)(byte){
 	v1 := int(b)
-	v2 := v1 &^ ((1<<uint(numBit-1)))
-	v3 := v2 | (value<<uint(numBit-1))
+	v2 := v1 &^ ((1<<uint(numBit)))
+	v3 := v2 | (value<<uint(numBit))
 	return byte(v3)
 
 }
@@ -275,8 +270,7 @@ func writeMessage(filename string, tab []byte){
 	}
 	defer f.Close()	
 	
-	
-	
+
 	n2, err := f.Write(tab)
     check(err)
     fmt.Printf("wrote %d bytes\n", n2)
@@ -301,40 +295,6 @@ func openImgPng(filename string) (image.NRGBA){
 	return *im
 }
 
-
-func encodeLen(l int) ([]byte){
-	/*tab := make([]byte, 8)
-	i:=0
-	j:=0
-	for l!=0 && i<8 {
-		tab[j] = (tab[j]<<1) + l%2
-		
-		l=l/2
-		i++
-		j=i/8
-	}
-	return tab*/
-	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~")
-	fmt.Println(l)
-	bs := make([]byte, 4)
-    binary.LittleEndian.PutUint32(bs, uint32(l))
-    fmt.Println(bs)
-    for i:=0;i<32;i++ {
-	    bit := getMessageBit(bs,int(i/8),i%8)
-	    fmt.Print(bit)
-    }
-	fmt.Println("~~~~~~~~~~~~~~~~~~~~~~~~~~")
-    return bs
-}
-
-func decodeLen(tab []byte)(int){
-	fmt.Println("************************")
-	fmt.Println(tab)
-	nb :=int(binary.LittleEndian.Uint32(tab))
-	fmt.Println(nb)	
-	fmt.Println("************************")
-	return nb
-}
 
 
 
