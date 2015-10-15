@@ -1,30 +1,41 @@
 package main
 
 import
-(	"fmt"
+(	
+	"fmt"
 	"flag"
 	"image"
 	"image/png"
 	"os"
 	_ "strconv"
 	"math"
+
+
 )
 
-type Pixel struct {
-	x int
-	y int
-	rgba string
-}
+
+var container, message, output string
+var extract bool
+
+var pixelPath, rgbPath string
+var key string
 
 
-func main() {
-	fmt.Println("LSB Goooo")	
-	var container, message, output string
-	var extract bool
+func main() {	
+
+
 	flag.StringVar(&container, "container", "", "The container input")
 	flag.StringVar(&message, "message", "", "Message file")
 	flag.StringVar(&output, "output", "", "The container output")
 	flag.BoolVar(&extract, "extract", false, "If set : extraction")
+
+	flag.StringVar(&pixelPath, "pixelPath", "horizontal", "Pixel Path methode (horizontal/vertical/diagonal/field)")
+
+	flag.StringVar(&rgbPath, "rgbPath", "basic", "RGB Path methode (none/basic)")
+
+	flag.StringVar(&key, "key", "", "Crypt/decrypt key")
+
+
 	flag.Parse()
 
 	var error bool = false
@@ -75,31 +86,48 @@ func main() {
 
 
 func insertMessage(containerPath string, messagePath string, outputPath string){
+	//initialisation
 	container := openImgPng(containerPath)
 	bounds := container.Bounds()
 
-	messageBytes := openMessage(messagePath)
-	pixel := Pixel{-1,-1,""}
+	maxSize := bounds.Max.X*bounds.Max.Y
+	if rgbPath=="basic" {
+		maxSize *= 3
+	}
+	fmt.Println("Maximum message size ",maxSize)
 
-	lenData := len(messageBytes)
+	messageBytes := openMessage(messagePath)
+	cypherMessageBytes := encrypt(messageBytes,[]byte(key))
+
+	
+
+	pixel := IteratorInit()
+	pixel.SetLayoutPath(pixelPath)
+	pixel.SetRgbPath(rgbPath)
+	pixel.PrintPath()
+	nbWrite:=0
+
+	lenData := len(cypherMessageBytes)
+	fmt.Println("Message size : ",lenData)
 	tmpLen := lenData
 	for i:=0;i<32;i++ {
 		bytLSB := getPixelBytes(container,pixel)
 		
 		//get bit of message
 		bit := tmpLen%2
+		
 		tmpLen=tmpLen/2
 
 		//set bit on container
 		bytLSB = setLSB(bytLSB,bit)
 		setPixelBytes(container, pixel, bytLSB)
 
-		pixel.next(bounds)
+		pixel.Next(bounds.Max.X,bounds.Max.Y)
 	}
 
 	var by byte
 	for i:=0;i<lenData;i++ {
-		by = messageBytes[i]
+		by = cypherMessageBytes[i]
 		for j:=0;j<8;j++ {
 			//get byte of container
 			bytLSB := getPixelBytes(container,pixel)
@@ -110,9 +138,9 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 			//set bit on container
 			bytLSB = setLSB(bytLSB,int(bit))
 			setPixelBytes(container, pixel, bytLSB)
+			nbWrite++
 
-
-			pixel.next(bounds)
+			pixel.Next(bounds.Max.X,bounds.Max.Y)
 		}
 				
 	}
@@ -122,18 +150,22 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 	defer outimg.Close()
 	err = png.Encode(outimg, container.SubImage(container.Bounds()))
 	check(err)
+	fmt.Printf("Ecriture de %d octets\n",(nbWrite/8))
 }
 
 func extractMessage(containerPath string, outputPath string){
 	container := openImgPng(containerPath)
 	bounds := container.Bounds()
-	pixel := Pixel{-1,-1,""}
+	pixel := IteratorInit()
+	pixel.SetLayoutPath(pixelPath)
+	pixel.SetRgbPath(rgbPath)
+
 	length:=0
 	for i:=0;i<32;i++ {
 		bytLSB := getPixelBytes(container,pixel)
 		length += getLSB(bytLSB)*int(math.Pow(float64(2),float64(i)))
 		
-		pixel.next(bounds)
+		pixel.Next(bounds.Max.X,bounds.Max.Y)
 	}
 
 	tab := make([]byte, uint(length))
@@ -146,12 +178,11 @@ func extractMessage(containerPath string, outputPath string){
 			
 			bytLSB := getPixelBytes(container,pixel)
 			bit := getLSB(bytLSB)
-			// fmt.Print(bit)
 			
 			by = setMessageBit(by,j,bit)
 
 
-			pixel.next(bounds)
+			pixel.Next(bounds.Max.X,bounds.Max.Y)
 		}
 		
 		tab[i]=by
@@ -160,42 +191,13 @@ func extractMessage(containerPath string, outputPath string){
 		by = 0x0000	
 		
 	}
-	// fmt.Println("")
-	// fmt.Println(by)
-	// fmt.Println(tab)
-	writeMessage(outputPath,tab)
+	
+	decryptTab := decrypt(tab,[]byte(key))
+	writeMessage(outputPath,decryptTab)
 }
 
 
-func (p *Pixel) next(b image.Rectangle){
-	if p.x==-1 {
-		p.x=0
-		p.y=0
-		p.rgba="r" 
-		return
-	}
-	//TODO seek alpha
 
-	switch p.rgba {
-		case "r":
-			p.rgba = "g"
-		case "g":
-			p.rgba = "b"
-		case "b":
-			p.rgba = "r"
-	}
-
-	if p.rgba=="r" {
-		p.x++
-		if p.x == b.Max.X {
-			p.x=0
-			p.y++
-			if p.y>=b.Max.Y {
-				fmt.Println("TODO check size before.")
-			}
-		}
-	}
-}
 
 func getMessageBit(b byte,  numBit int)(uint){
 	return ( uint(b) & (1<<uint(numBit)) ) >> uint(numBit)
@@ -217,9 +219,9 @@ func getLSB(b byte)(int){
 	return int(b)%2
 }
 
-func getPixelBytes(img image.NRGBA, pixel Pixel)(byte){
-	rgba := img.NRGBAAt(pixel.x, pixel.y)
-	switch pixel.rgba {
+func getPixelBytes(img image.NRGBA, pixel LsbPixel)(byte){
+	rgba := img.NRGBAAt(pixel.GetX(), pixel.GetY())
+	switch pixel.GetLayer() {
 		case "r" :
 			return rgba.R
 		case "g" :
@@ -232,9 +234,9 @@ func getPixelBytes(img image.NRGBA, pixel Pixel)(byte){
 	return 0
 }
 
-func setPixelBytes(img image.NRGBA, pixel Pixel, byt byte){
-	rgba := img.NRGBAAt(pixel.x, pixel.y)
-	switch pixel.rgba {
+func setPixelBytes(img image.NRGBA, pixel LsbPixel, byt byte){
+	rgba := img.NRGBAAt(pixel.GetX(), pixel.GetY())
+	switch pixel.GetLayer() {
 		case "r" :
 			rgba.R = byt
 		case "g" :
@@ -244,7 +246,7 @@ func setPixelBytes(img image.NRGBA, pixel Pixel, byt byte){
 		case "a" :
 			rgba.A = byt
 	}
-	img.Set(pixel.x, pixel.y, rgba)
+	img.Set(pixel.GetX(), pixel.GetY(), rgba)
 }
 
 func openMessage(filename string)([]byte){
@@ -273,7 +275,7 @@ func writeMessage(filename string, tab []byte){
 
 	n2, err := f.Write(tab)
     check(err)
-    fmt.Printf("wrote %d bytes\n", n2)
+    fmt.Printf("Extraction de %d octets\n", n2)
 }
 
 func openImgPng(filename string) (image.NRGBA){
