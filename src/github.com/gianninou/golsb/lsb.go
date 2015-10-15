@@ -186,8 +186,6 @@ func extractMessage(containerPath string, outputPath string){
 		}
 		
 		tab[i]=by
-		// fmt.Println("")
-		// fmt.Println(by)
 		by = 0x0000	
 		
 	}
