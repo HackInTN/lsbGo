@@ -30,7 +30,7 @@ func decrypt(cypher []byte, key []byte) []byte{
 	var IV byte
 
 	for i:=0;i<len(cypher);i++ {
-		data[i] = cypher[i] ^ key[i%keyLen] ^ IV/
+		data[i] = cypher[i] ^ key[i%keyLen] ^ IV
 		IV = cypher[i]
 	}
 	return data

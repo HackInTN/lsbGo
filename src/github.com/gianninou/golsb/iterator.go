@@ -171,6 +171,7 @@ func (p *LsbPixel) NextDiagonal(dx, dy int){
 
 
 func (p *LsbPixel) NextCorps(dx, dy int){
+	//fmt.Println(dx,dy)
 	if p.y==0 && p.x==0 {
 		p.x=1
 		return
@@ -182,18 +183,17 @@ func (p *LsbPixel) NextCorps(dx, dy int){
 	nb := p.y*dx + p.x
 	nb = (nb*P)%N
 
-	for nb%dy>=dx || nb/dy>=dy {
+	for nb/dx>=dy || nb%dx>=dx {
 		nb = (nb*P)%N
 	}
-
-	p.x=nb%dy
-	p.y=nb/dy
+	p.x=nb%dx
+	p.y=nb/dx
 
 	if p.y==0 && p.x==1 {
 		fmt.Println("Erreur borne : Exit")
 		os.Exit(-1)
 	}
-	fmt.Println(p)
+	//fmt.Println(p)
 
 }
 

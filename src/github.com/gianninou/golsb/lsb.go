@@ -97,7 +97,12 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 	fmt.Println("Maximum message size ",maxSize)
 
 	messageBytes := openMessage(messagePath)
-	cypherMessageBytes := encrypt(messageBytes,[]byte(key))
+	var cypherMessageBytes []byte
+	if len(key)>0 {
+		cypherMessageBytes = encrypt(messageBytes,[]byte(key))
+	}else{
+		cypherMessageBytes = messageBytes
+	}
 
 	
 
@@ -134,7 +139,7 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 			
 			//get bit of message
 			bit := getMessageBit(by,j)
-
+			//fmt.Print(bit)
 			//set bit on container
 			bytLSB = setLSB(bytLSB,int(bit))
 			setPixelBytes(container, pixel, bytLSB)
@@ -142,7 +147,7 @@ func insertMessage(containerPath string, messagePath string, outputPath string){
 
 			pixel.Next(bounds.Max.X,bounds.Max.Y)
 		}
-				
+		//fmt.Println()
 	}
 
 	outimg, err := os.Create(outputPath)
@@ -180,17 +185,25 @@ func extractMessage(containerPath string, outputPath string){
 			bit := getLSB(bytLSB)
 			
 			by = setMessageBit(by,j,bit)
-
+			//fmt.Print(bit)
 
 			pixel.Next(bounds.Max.X,bounds.Max.Y)
 		}
 		
+		//fmt.Println("")
+
 		tab[i]=by
 		by = 0x0000	
 		
 	}
+	var decryptTab []byte
+	if len(key)>0 {
+		decryptTab = decrypt(tab,[]byte(key))
+	}else{
+		decryptTab = tab
+	}
+
 	
-	decryptTab := decrypt(tab,[]byte(key))
 	writeMessage(outputPath,decryptTab)
 }
 
@@ -259,7 +272,7 @@ func openMessage(filename string)([]byte){
 	tab := make([]byte, stats.Size())
 	_, err = f.Read(tab)
 	check(err)
-
+	//fmt.Println(tab)
 	return tab
 }
 
@@ -270,7 +283,7 @@ func writeMessage(filename string, tab []byte){
 	}
 	defer f.Close()	
 	
-
+	//fmt.Println(tab)
 	n2, err := f.Write(tab)
     check(err)
     fmt.Printf("Extraction de %d octets\n", n2)
