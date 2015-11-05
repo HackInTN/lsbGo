@@ -25,3 +25,4 @@ La clé est de taille variable, le chiffrement se fait par bloc d'un octet.
 De ce fait on parcours les octets de le clé en même temps que le message à un modulo près.
 
 
+
